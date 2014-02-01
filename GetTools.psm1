@@ -35,7 +35,8 @@ function Get-Tool {
 		Add-File-To-Project $project $toLocation
 		
 		# open the file in Visual Studio
-		$DTE.ExecuteCommand("File.OpenFile", $toLocation)
+        # (need to wrap the command in double-quotes for when the toLocation contains spaces)
+		$DTE.ExecuteCommand("File.OpenFile", """" + $toLocation + """")
 	}
 }
 
@@ -54,44 +55,51 @@ function Prompt-User-To-Select-From-Available-Tools($githubUserName) {
 
 function Prompt-User-To-Choose-From-Toolbox($jsonResponse) {
 
-	if($jsonResponse -and $jsonResponse.Length -gt 0)
-	{
-		Write-Host `n"Choose a tool:"`n
+	if(!$jsonResponse -or !($jsonResponse.Length -gt 0))
+    {
+        Write-Host `n`t"No tools found in toolbox"`n	
+        return $null
+    }
 
-		$tools = @{}
-		
-		# Create & Display list of available tools
+	Write-Host `n"Choose a tool:"`n
+
+	$tools = @{}
+
+    # when only 1 object in the response, the json serializer
+    # doesn't create the array, just the object
+    if($jsonResponse.Length -eq 1)
+    {
+        $tools[0] = $jsonResponse.name
+    }
+
+    if($jsonResponse.Length -gt 1)
+	{		
+		# Create list of available tools
 		for ($i=0; $i -lt $jsonResponse.Length; $i++) 
 		{
-			$toolName = $jsonResponse[$i].name
-			
-			Write-Host `t [$i] $toolName `n
-			
 			# key = toolNumber, value = toolName
-			$tools[$i] = $toolName
+			$tools[$i] = $jsonResponse[$i].name
 		}
-		
-		$strToolNumber = Read-Host 'Enter Tool # to download'
-		
-		$toolNumber = $strToolNumber -as [int]
-		
-		if($tools.ContainsKey($toolNumber))
-		{		
-			$fileToDownload = $tools[$toolNumber]
-			return $fileToDownload
-		} 
-		else 
-		{
-			Write-Host `n`t"Tool number [$strToolNumber] is not valid"`n
-		}			
-	} 
-	else 
-	{
-		Write-Host `n`t"No tools found in toolbox"`n	
-	}
+	} 	
 
-	# no valid tool was chosen
-	return $null
+	# Display list of tools for selection
+	for ($i=0; $i -lt $tools.Count; $i++) 
+	{		
+		Write-Host `t [$i] $tools[$i]
+	}
+		
+	$strToolNumber = Read-Host `n'Enter Tool # to download'
+		
+	$toolNumber = $strToolNumber -as [int]
+		
+	if(!$tools.ContainsKey($toolNumber))
+	{		
+		Write-Host `n`t"Tool number [$strToolNumber] is not valid"`n
+        return $null
+	} 
+
+    $fileToDownload = $tools[$toolNumber]
+	return $fileToDownload
 }
 
 function Get-List-Of-GitHub-Tools($githubUserName) {
@@ -150,8 +158,8 @@ function Download-From-GitHub-Toolbox($githubUserName, $fileToDownload, $toLocat
 	Write-Host `t"To Location:" $toLocation `n
 		
 	# download file from public git repo 
-	
-	$uri = New-Object System.Uri "https://github.com/$githubUserName/toolbox/tree/master/tools/$fileToDownload"
+
+	$uri = New-Object System.Uri "https://raw.github.com/$githubUserName/toolbox/master/tools/$fileToDownload"
 	$webClient = Get-WebClient
 	
 	# if user types invalid	$fileToDownload here, this could get 404
